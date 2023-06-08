@@ -19,7 +19,7 @@ contract Exchange is ERC20{
     }
 
     //Function to add liquidity to contract
-    function addLiquidity(uint256 amount) public payable returns(uint){
+    function addLiquidity(uint256 _amount) public payable returns(uint){
         uint liquidity;
         uint ethBal = address(this).balance;
         uint lpBalance = getReserve();
@@ -29,7 +29,7 @@ contract Exchange is ERC20{
         correct ratios of eth reserve and lp token reserve */
         if(lpBalance == 0){
 
-            lp.transferFrom(msg.sender, address(this), amount);
+            lp.transferFrom(msg.sender, address(this), _amount);
 
             liquidity = ethBal;
 
@@ -45,7 +45,7 @@ contract Exchange is ERC20{
 
             uint lpAmount = (msg.value * lpBalance)/ethRes;
 
-            require(lpAmount <= amount, "Insufficient amount of lp tokens");
+            require(lpAmount <= _amount, "Insufficient amount of lp tokens");
 
             lp.transferFrom(msg.sender, address(this), lpAmount);
 
@@ -54,7 +54,55 @@ contract Exchange is ERC20{
             _mint(msg.sender, liquidity);
 
         }
+        return liquidity;
 
+    }
+
+    function removeLiquidity(uint _amount) public returns(uint, uint){
+        require(_amount > 0, "amount should be greater than zero");
+        uint ethRes = address(this).balance;
+        uint _totalSupply = totalSupply();
+
+        uint ethAmount = (ethRes * _amount)/_totalSupply;
+
+        uint lpTokenAmount = (getReserve()*_amount)/_totalSupply;
+
+        _burn(msg.sender, _amount);
+
+        payable(msg.sender).transfer(ethAmount);
+
+        ERC20(lpToken).transfer(msg.sender, lpTokenAmount);
+
+        return (ethAmount, lpTokenAmount);
+    }
+
+    function getAmountOfTokens(uint256 inputAmount, uint256 inputReserve, uint256 outputReserve) public pure returns(uint256){
+        require(inputReserve > 0 && outputReserve > 0, "Reserves not valid");
+        uint256 inputAmountWithFees = inputAmount * 99;
+        uint256 num = inputAmountWithFees * outputReserve;
+        uint256 denum = (inputReserve*100)+inputAmountWithFees;
+        return num/denum;
+    }
+
+    function ethToToken(uint _mintToken) public payable{
+        uint256 tokenRes = getReserve();
+        uint256 tokensBought = getAmountOfTokens(msg.value, address(this).balance - msg.value, tokenRes);
+
+        require(tokensBought >= _mintToken, "insuffiecient output amount");
+
+        ERC20(lpToken).transfer(msg.sender, tokensBought);
+    }
+
+    function TokenToEth(uint _tokenSold, uint _minEth) public{
+        uint256 tokenRes = getReserve();
+
+        uint256 ethBought = getAmountOfTokens(_tokenSold, tokenRes, address(this).balance);
+
+        require(ethBought >= _minEth, "insufficient ouptut amount");
+
+        ERC20(lpToken).transferFrom(msg.sender, address(this), _tokenSold);
+
+        payable(msg.sender).transfer(ethBought);
     }
 
     
